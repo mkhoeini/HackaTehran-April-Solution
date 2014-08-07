@@ -8,70 +8,90 @@ var fs = require("fs"),
     headlinesStr = fs.readFileSync(headlinesFile, "utf8"),
     headlines = JSON.parse(headlinesStr),
 
-    processedPage = processPage();
+    headlinesByLength = byLength(headlines),
+    wordsList = getWordList(headlinesByLength),
+
+    processedPage = processPage(pageStr, headlinesByLength, wordsList);
 
 fs.writeFileSync("result.html", processedPage, "utf8");
 
-function processPage()
+function byLength(headlines)
+{
+  var result = {};
+
+  headlines.forEach(function (headline) {
+    var split = headline.split(" "),
+        len = split.length,
+        col = result[len] || [];
+
+    col.push(split);
+    result[len] = col;
+  });
+
+  return result;
+}
+
+function getWordList(headlinesByLength)
+{
+  var result = {};
+
+  for(var len in headlinesByLength) {
+    result[len] = result[len] || {};
+
+    headlinesByLength[len].forEach(function (splitHeadline) {
+      splitHeadline.forEach(function (word, index) {
+        var col = result[len][index] || [];
+        col.push(word);
+        result[len][index] = col;
+      });
+    });
+  }
+
+  return result;
+}
+
+function processPage(pageStr, headlinesByLength, wordsList)
 {
   var splited = pageStr.split(/{{{|}}}/g);
 
   for (var i = 1, len = splited.length; i < len; i+=2)
   {
-    var sentence = generateSentence(parseInt(splited[i]));
-    splited[i] = sentence;
+    var requestedLength = parseInt(splited[i]);
+
+    if (!headlinesByLength[requestedLength] ||  headlinesByLength[requestedLength].length < 2) {
+      console.log("WARNING: Requested length ", requestedLength, " doesn't have enough samples:\n",
+                  headlinesByLength[requestedLength]);
+    } else {
+      var sampleHeadline = getSampleHeadline(headlinesByLength, requestedLength),
+          headline = replaceAWord(sampleHeadline, wordsList, requestedLength);
+
+      splited[i] = headline;
+    }
   }
 
   return splited.join(" ");
 }
 
-function generateSentence(len)
+function getSampleHeadline(headlinesByLength, requestedLength)
 {
-  return "{Placeholder}"
+  var headlines = headlinesByLength[requestedLength],
+      random = rand(headlines.length);
+
+  return headlines[random];
 }
 
+function replaceAWord(headline, wordsList, requestedLength)
+{
+  var randomPos = rand(requestedLength),
+      words = wordsList[requestedLength][randomPos],
+      word = words[rand(words.length)];
 
-// var sentences = JSON.parse(rw.readFileSync(sentenceFile, "utf8"));
-// var words = JSON.parse(rw.readFileSync(wordsFile, "utf8"));
-// var input = JSON.parse(rw.readFileSync(inputFile, "utf8"));
-//
-// var result = [];
-//
-//
-// input.forEach(function (numWords){
-//   var sentSet = sentences[numWords];
-//   var randomSentInd = Math.random() * sentSet.length |0;
-//   var randSent = sentSet[randomSentInd];
-//
-//   var sentWords = randSent.split(" ");
-//   var randWordInd = Math.random() * numWords |0;
-//   var wordSet = [];
-//
-//   while (wordSet.length <= 1) {
-//     wordSet = words[numWords++][randWordInd];
-//   }
-//
-//   var res = replaceWord(sentWords, randWordInd, wordSet);
-//
-//   result.push(sentWords.join(" "));
-// });
-//
-// function replaceWord(sentenceWords, index, wordSet)
-// {
-//   var replaceWord = sentenceWords[index];
-//
-//   while(replaceWord === sentenceWords[index])
-//   {
-//     randInd = Math.random() * Math.random() * wordSet.length |0;
-//     replaceWord = wordSet[randInd];
-//   }
-//
-//   sentenceWords.splice(index, 1, replaceWord);
-//   return sentenceWords.join(" ");
-// }
-//
-//
-// rw.writeFileSync(outFile, JSON.stringify(result), "utf8");
-//
-//
-//
+  headline[randomPos] = word;
+  return headline.join(" ");
+}
+
+function rand(num)
+{
+  return Math.random() * num |0;
+}
+
